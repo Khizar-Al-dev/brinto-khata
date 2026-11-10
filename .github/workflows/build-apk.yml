@@ -1,0 +1,45 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          unzip -o brinto-khata-android-local.zip
+          echo "--- project layout ---"
+          find . -maxdepth 3 -name gradlew -o -maxdepth 2 -name settings.gradle -o -maxdepth 2 -name settings.gradle.kts | sort
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Grant execute permission for gradlew
+        run: |
+          GRADLEW_PATH=$(find . -name gradlew -type f | head -n 1)
+          echo "GRADLEW_PATH=$GRADLEW_PATH" >> "$GITHUB_ENV"
+          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          chmod +x "$GRADLEW_PATH"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: brinto-khata-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
