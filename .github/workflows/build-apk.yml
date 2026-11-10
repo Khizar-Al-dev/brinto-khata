@@ -31,6 +31,88 @@ jobs:
           echo "GRADLE_BIN=$GRADLE_BIN" >> "$GITHUB_ENV"
           "$GRADLE_BIN" --version
 
+      - name: Patch Compose Compiler plugin
+        run: |
+          python3 - <<'PYEOF'
+          from pathlib import Path
+          proj = Path("brinto-khata-android-local")
+
+          def show(path):
+              print("----", path, "----")
+              print(path.read_text())
+              print("---- end ----")
+
+          toml_path = proj / "gradle/libs.versions.toml"
+          toml = toml_path.read_text()
+          show(toml_path)
+
+          kotlin_version = None
+          kotlin_ref = False
+          for line in toml.splitlines():
+              s = line.strip()
+              if "=" in s and s.split("=")[0].strip() == "kotlin" and '"' in s:
+                  kotlin_version = s.split('"')[1]
+                  kotlin_ref = True
+                  break
+          print("Kotlin version:", kotlin_version, "ref:", kotlin_ref)
+
+          def catalog_key(text):
+              for line in text.splitlines():
+                  if "org.jetbrains.kotlin.plugin.compose" in line:
+                      return line.split("=")[0].strip()
+              return None
+
+          key = catalog_key(toml)
+          if key is None:
+              if kotlin_ref:
+                  entry = 'kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }'
+              else:
+                  entry = 'kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version = "2.0.21" }'
+              if "[plugins]" in toml:
+                  toml = toml.replace("[plugins]", "[plugins]" + chr(10) + entry, 1)
+              else:
+                  toml = toml + chr(10) + "[plugins]" + chr(10) + entry + chr(10)
+              toml_path.write_text(toml)
+              key = "kotlin-compose"
+              print("Added kotlin-compose to version catalog")
+          if kotlin_version is None:
+              kotlin_version = "2.0.21"
+          alias = "libs.plugins." + key.replace("-", ".")
+          print("Catalog key:", key, "alias:", alias)
+
+          def patch(path, apply_suffix):
+              text = path.read_text()
+              show(path)
+              if "kotlin.plugin.compose" in text:
+                  print(path, "already has compose compiler plugin")
+                  return
+              lines = text.splitlines()
+              out = []
+              done = False
+              for line in lines:
+                  out.append(line)
+                  if not done and "kotlin" in line and "android" in line:
+                      if "libs.plugins" in text:
+                          out.append("    alias(" + alias + ")" + apply_suffix)
+                      elif apply_suffix:
+                          out.append('    id("org.jetbrains.kotlin.plugin.compose") version "' + kotlin_version + '" apply false')
+                      else:
+                          out.append('    id("org.jetbrains.kotlin.plugin.compose")')
+                      done = True
+              if done:
+                  path.write_text(chr(10).join(out) + chr(10))
+                  print("Patched", path)
+              else:
+                  print("WARN: no kotlin android plugin line in", path)
+
+          patch(proj / "build.gradle.kts", " apply false")
+          patch(proj / "app/build.gradle.kts", "")
+          print("---- patched root build.gradle.kts ----")
+          print((proj / "build.gradle.kts").read_text())
+          print("---- patched app build.gradle.kts ----")
+          print((proj / "app/build.gradle.kts").read_text())
+          PYEOF
+
       - name: Build debug APK
         run: |
           cd brinto-khata-android-local
