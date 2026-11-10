@@ -23,12 +23,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Gradle from wrapper properties
+      - name: Install Gradle 8.7
         run: |
-          cd brinto-khata-android-local
-          DIST_URL=$(grep distributionUrl gradle/wrapper/gradle-wrapper.properties | cut -d= -f2- | tr -d '\r' | sed 's/\:/:/g')
-          echo "Gradle distribution: $DIST_URL"
-          curl -sL "$DIST_URL" -o /tmp/gradle.zip
+          curl -sL "https://services.gradle.org/distributions/gradle-8.7-bin.zip" -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           GRADLE_BIN=$(echo /tmp/gradle-*/bin/gradle)
           echo "GRADLE_BIN=$GRADLE_BIN" >> "$GITHUB_ENV"
