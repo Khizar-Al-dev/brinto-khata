@@ -161,6 +161,14 @@ jobs:
               if depth > 0:
                   kt.write_text(t + nl + ("*/" + nl) * depth)
                   print("Closed", depth, "dangling block comment(s) in", kt)
+          gp = proj / "gradle.properties"
+          props = gp.read_text() if gp.exists() else ""
+          kept = [l for l in props.splitlines() if not l.startswith("org.gradle.jvmargs") and not l.startswith("kotlin.daemon.jvmargs")]
+          kept.append("org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m")
+          kept.append("kotlin.daemon.jvmargs=-Xmx3072m")
+          gp.write_text(chr(10).join(kept) + chr(10))
+          print("---- gradle.properties ----")
+          print(gp.read_text())
           print("---- ImageUtils.kt (numbered) ----")
           for idx, line in enumerate((proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt").read_text().splitlines(), 1):
               print(idx, line)
