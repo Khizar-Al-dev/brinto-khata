@@ -80,6 +80,25 @@ jobs:
                   print("WARN: no kotlin android plugin line in app build file")
           print("---- patched app/build.gradle.kts ----")
           print(app_path.read_text())
+          app2 = app_path.read_text()
+          if "material-icons-extended" not in app2:
+              dep_lines = app2.splitlines()
+              dep_out = []
+              dep_done = False
+              for line in dep_lines:
+                  dep_out.append(line)
+                  if not dep_done and "androidx.compose.material3:material3" in line:
+                      dep_out.append('    implementation("androidx.compose.material:material-icons-extended")')
+                      dep_done = True
+              app_path.write_text(chr(10).join(dep_out) + chr(10))
+              print("Added material-icons-extended:", dep_done)
+          print("---- app/build.gradle.kts with icons dep ----")
+          print(app_path.read_text())
+          iu = proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt"
+          iu_text = iu.read_text()
+          if "image/*" in iu_text:
+              iu.write_text(iu_text.replace("image/*", "image"))
+              print("Fixed nested comment opener in ImageUtils.kt KDoc")
           dq = chr(34)
           sq = chr(39)
           bs = chr(92)
