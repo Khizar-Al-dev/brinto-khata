@@ -80,13 +80,94 @@ jobs:
                   print("WARN: no kotlin android plugin line in app build file")
           print("---- patched app/build.gradle.kts ----")
           print(app_path.read_text())
+          dq = chr(34)
+          sq = chr(39)
+          bs = chr(92)
+          nl = chr(10)
+          triple = dq + dq + dq
+          def comment_depth(text):
+              i = 0
+              n = len(text)
+              depth = 0
+              state = "code"
+              while i < n:
+                  c = text[i]
+                  nxt = text[i + 1] if i + 1 < n else ""
+                  if state == "line":
+                      if c == nl:
+                          state = "code"
+                      i += 1
+                  elif state == "string":
+                      if c == bs:
+                          i += 2
+                      elif c == dq:
+                          state = "code"
+                          i += 1
+                      elif c == nl:
+                          state = "code"
+                          i += 1
+                      else:
+                          i += 1
+                  elif state == "char":
+                      if c == bs:
+                          i += 2
+                      elif c == sq:
+                          state = "code"
+                          i += 1
+                      else:
+                          i += 1
+                  elif state == "raw":
+                      if text.startswith(triple, i):
+                          state = "code"
+                          i += 3
+                      else:
+                          i += 1
+                  elif state == "block":
+                      if c == "/" and nxt == "*":
+                          depth += 1
+                          i += 2
+                      elif c == "*" and nxt == "/":
+                          depth -= 1
+                          i += 2
+                          if depth == 0:
+                              state = "code"
+                      else:
+                          i += 1
+                  else:
+                      if c == "/" and nxt == "/":
+                          state = "line"
+                          i += 2
+                      elif c == "/" and nxt == "*":
+                          state = "block"
+                          depth = 1
+                          i += 2
+                      elif c == dq:
+                          if text.startswith(triple, i):
+                              state = "raw"
+                              i += 3
+                          else:
+                              state = "string"
+                              i += 1
+                      elif c == sq:
+                          state = "char"
+                          i += 1
+                      else:
+                          i += 1
+              return depth, state
           for kt in sorted(proj.rglob("*.kt")):
               t = kt.read_text()
-              if t.count("/*") > t.count("*/"):
-                  kt.write_text(t + chr(10) + "*/" + chr(10))
-                  print("Closed dangling block comment in", kt)
-          print("---- ImageUtils.kt ----")
-          print((proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt").read_text())
+              depth, st = comment_depth(t)
+              print(kt, "block depth:", depth, "state:", st)
+              if depth > 0:
+                  kt.write_text(t + nl + ("*/" + nl) * depth)
+                  print("Closed", depth, "dangling block comment(s) in", kt)
+          print("---- ImageUtils.kt (numbered) ----")
+          for idx, line in enumerate((proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt").read_text().splitlines(), 1):
+              print(idx, line)
+          print("---- AddCustomerScreen.kt tail ----")
+          for idx, line in enumerate((proj / "app/src/main/java/com/brinto/khata/ui/screens/AddCustomerScreen.kt").read_text().splitlines(), 1):
+              if idx >= 300:
+                  print(idx, line)
           PYEOF
 
       - name: Build debug APK
