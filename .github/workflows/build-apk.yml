@@ -80,6 +80,13 @@ jobs:
                   print("WARN: no kotlin android plugin line in app build file")
           print("---- patched app/build.gradle.kts ----")
           print(app_path.read_text())
+          for kt in sorted(proj.rglob("*.kt")):
+              t = kt.read_text()
+              if t.count("/*") > t.count("*/"):
+                  kt.write_text(t + chr(10) + "*/" + chr(10))
+                  print("Closed dangling block comment in", kt)
+          print("---- ImageUtils.kt ----")
+          print((proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt").read_text())
           PYEOF
 
       - name: Build debug APK
