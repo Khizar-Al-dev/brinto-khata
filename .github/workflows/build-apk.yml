@@ -104,7 +104,13 @@ jobs:
       - name: Set Gradle memory
         run: |
           P=brinto-khata-android
-          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.daemon=false\norg.gradle.parallel=false\n' > "$P/gradle.properties"
+          echo "--- gradle.properties before ---"
+          cat "$P/gradle.properties" || echo "(no gradle.properties)"
+          touch "$P/gradle.properties"
+          # Keep the project's own gradle.properties (it enables AndroidX, etc.); only replace the memory lines and make sure AndroidX is enabled.
+          sed -i '/^org.gradle.jvmargs=/d; /^org.gradle.daemon=/d; /^org.gradle.parallel=/d; /^android.useAndroidX=/d' "$P/gradle.properties"
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.daemon=false\norg.gradle.parallel=false\nandroid.useAndroidX=true\n' >> "$P/gradle.properties"
+          echo "--- gradle.properties after ---"
           cat "$P/gradle.properties"
       - name: Build debug APK
         run: |
