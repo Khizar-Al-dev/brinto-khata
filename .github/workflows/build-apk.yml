@@ -5,24 +5,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Unzip project
         run: |
-          unzip -o brinto-khata-android-local.zip -d brinto-khata-android-local
-          ls brinto-khata-android-local
-
+          unzip -o brinto-khata-android.zip -d brinto-khata-android
+          ls brinto-khata-android
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Install Gradle 8.7
         run: |
           curl -sL "https://services.gradle.org/distributions/gradle-8.7-bin.zip" -o /tmp/gradle.zip
@@ -30,10 +28,9 @@ jobs:
           GRADLE_BIN=$(echo /tmp/gradle-*/bin/gradle)
           echo "GRADLE_BIN=$GRADLE_BIN" >> "$GITHUB_ENV"
           "$GRADLE_BIN" --version
-
       - name: Patch Compose Compiler plugin
         run: |
-          P=brinto-khata-android-local
+          P=brinto-khata-android
           echo "--- project files ---"
           find "$P" -type f | sort
           echo "--- settings.gradle.kts ---"
@@ -42,7 +39,7 @@ jobs:
           cat "$P/app/build.gradle.kts"
           python3 - <<'PYEOF'
           from pathlib import Path
-          proj = Path("brinto-khata-android-local")
+          proj = Path("brinto-khata-android")
           app_path = proj / "app/build.gradle.kts"
           settings_path = proj / "settings.gradle.kts"
           app = app_path.read_text()
@@ -62,149 +59,60 @@ jobs:
           if "kotlin.plugin.compose" in app:
               print("app already has compose compiler plugin")
           else:
-              lines = app.splitlines()
-              out = []
-              done = False
-              for line in lines:
-                  if "kotlinCompilerExtensionVersion" in line:
-                      print("Removing line:", line)
-                      continue
-                  out.append(line)
-                  if not done and "org.jetbrains.kotlin.android" in line:
-                      out.append('    id("org.jetbrains.kotlin.plugin.compose") version "' + kotlin_version + '"')
-                      done = True
-              if done:
-                  app_path.write_text(chr(10).join(out) + chr(10))
-                  print("Patched app build.gradle.kts")
-              else:
-                  print("WARN: no kotlin android plugin line in app build file")
-          print("---- patched app/build.gradle.kts ----")
-          print(app_path.read_text())
-          app2 = app_path.read_text()
-          if "material-icons-extended" not in app2:
-              dep_lines = app2.splitlines()
-              dep_out = []
-              dep_done = False
-              for line in dep_lines:
-                  dep_out.append(line)
-                  if not dep_done and "androidx.compose.material3:material3" in line:
-                      dep_out.append('    implementation("androidx.compose.material:material-icons-extended")')
-                      dep_done = True
-              app_path.write_text(chr(10).join(dep_out) + chr(10))
-              print("Added material-icons-extended:", dep_done)
-          print("---- app/build.gradle.kts with icons dep ----")
-          print(app_path.read_text())
-          iu = proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt"
-          iu_text = iu.read_text()
-          if "image/*" in iu_text:
-              iu.write_text(iu_text.replace("image/*", "image"))
-              print("Fixed nested comment opener in ImageUtils.kt KDoc")
-          dq = chr(34)
-          sq = chr(39)
-          bs = chr(92)
-          nl = chr(10)
-          triple = dq + dq + dq
-          def comment_depth(text):
-              i = 0
-              n = len(text)
-              depth = 0
-              state = "code"
-              while i < n:
-                  c = text[i]
-                  nxt = text[i + 1] if i + 1 < n else ""
-                  if state == "line":
-                      if c == nl:
-                          state = "code"
-                      i += 1
-                  elif state == "string":
-                      if c == bs:
-                          i += 2
-                      elif c == dq:
-                          state = "code"
-                          i += 1
-                      elif c == nl:
-                          state = "code"
-                          i += 1
-                      else:
-                          i += 1
-                  elif state == "char":
-                      if c == bs:
-                          i += 2
-                      elif c == sq:
-                          state = "code"
-                          i += 1
-                      else:
-                          i += 1
-                  elif state == "raw":
-                      if text.startswith(triple, i):
-                          state = "code"
-                          i += 3
-                      else:
-                          i += 1
-                  elif state == "block":
-                      if c == "/" and nxt == "*":
-                          depth += 1
-                          i += 2
-                      elif c == "*" and nxt == "/":
-                          depth -= 1
-                          i += 2
-                          if depth == 0:
-                              state = "code"
-                      else:
-                          i += 1
-                  else:
-                      if c == "/" and nxt == "/":
-                          state = "line"
-                          i += 2
-                      elif c == "/" and nxt == "*":
-                          state = "block"
-                          depth = 1
-                          i += 2
-                      elif c == dq:
-                          if text.startswith(triple, i):
-                              state = "raw"
-                              i += 3
-                          else:
-                              state = "string"
-                              i += 1
-                      elif c == sq:
-                          state = "char"
-                          i += 1
-                      else:
-                          i += 1
-              return depth, state
-          for kt in sorted(proj.rglob("*.kt")):
-              t = kt.read_text()
-              depth, st = comment_depth(t)
-              print(kt, "block depth:", depth, "state:", st)
-              if depth > 0:
-                  kt.write_text(t + nl + ("*/" + nl) * depth)
-                  print("Closed", depth, "dangling block comment(s) in", kt)
-          gp = proj / "gradle.properties"
-          props = gp.read_text() if gp.exists() else ""
-          kept = [l for l in props.splitlines() if not l.startswith("org.gradle.jvmargs") and not l.startswith("kotlin.daemon.jvmargs")]
-          kept.append("org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m")
-          kept.append("kotlin.daemon.jvmargs=-Xmx3072m")
-          gp.write_text(chr(10).join(kept) + chr(10))
-          print("---- gradle.properties ----")
-          print(gp.read_text())
-          print("---- ImageUtils.kt (numbered) ----")
-          for idx, line in enumerate((proj / "app/src/main/java/com/brinto/khata/util/ImageUtils.kt").read_text().splitlines(), 1):
-              print(idx, line)
-          print("---- AddCustomerScreen.kt tail ----")
-          for idx, line in enumerate((proj / "app/src/main/java/com/brinto/khata/ui/screens/AddCustomerScreen.kt").read_text().splitlines(), 1):
-              if idx >= 300:
-                  print(idx, line)
+              plugins = "plugins {"
+              marker = app.find(plugins)
+              insert = f'\n    id("org.jetbrains.kotlin.plugin.compose") version "{kotlin_version}"'
+              app = app[: marker + len(plugins)] + insert + app[marker + len(plugins):]
+              app_path.write_text(app)
+              print("added compose compiler plugin")
           PYEOF
-
+      - name: Patch ImageUtils imports
+        run: |
+          P=brinto-khata-android
+          grep -rl "androidx.compose.ui.graphics.ImageBitmap" "$P" --include="*.kt" || true
+          grep -rl "asImageBitmap" "$P" --include="*.kt" || true
+          python3 - <<'PYEOF'
+          import re
+          from pathlib import Path
+          proj = Path("brinto-khata-android")
+          for f in proj.rglob("*.kt"):
+              t = f.read_text()
+              orig = t
+              t = t.replace("import androidx.compose.ui.graphics.ImageBitmap", "import android.graphics.Bitmap")
+              t = re.sub(r"\bImageBitmap\b", "Bitmap", t)
+              t = t.replace(".asImageBitmap()", "")
+              t = t.replace("Bitmap.createBitmap(", "android.graphics.Bitmap.createBitmap(")
+              if t != orig:
+                  f.write_text(t)
+                  print("patched", f)
+          PYEOF
+      - name: Add material-icons-extended
+        run: |
+          P=brinto-khata-android
+          grep -n "material" "$P/app/build.gradle.kts" || true
+          python3 - <<'PYEOF'
+          from pathlib import Path
+          p = Path("brinto-khata-android/app/build.gradle.kts")
+          t = p.read_text()
+          if "material-icons-extended" not in t:
+              t = t.replace('implementation("androidx.compose.material3:material3")', 'implementation("androidx.compose.material3:material3")\n    implementation("androidx.compose.material:material-icons-extended")')
+              p.write_text(t)
+              print("added material-icons-extended")
+          else:
+              print("material-icons-extended already present")
+          PYEOF
+      - name: Set Gradle memory
+        run: |
+          P=brinto-khata-android
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.daemon=false\norg.gradle.parallel=false\n' > "$P/gradle.properties"
+          cat "$P/gradle.properties"
       - name: Build debug APK
         run: |
-          cd brinto-khata-android-local
-          "$GRADLE_BIN" assembleDebug --stacktrace
-
-      - name: Upload debug APK
+          cd brinto-khata-android
+          "$GRADLE_BIN" :app:assembleDebug --stacktrace
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: brinto-khata-debug-apk
-          path: brinto-khata-android-local/app/build/outputs/apk/debug/app-debug.apk
+          path: brinto-khata-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
