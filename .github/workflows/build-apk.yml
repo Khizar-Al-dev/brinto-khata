@@ -86,7 +86,7 @@ jobs:
                   f.write_text(t)
                   print("patched", f)
           PYEOF
-      - name: Fix unclosed comment in ImageUtils
+      - name: Fix nested comment in ImageUtils KDoc
         run: |
           P=brinto-khata-android
           F="$P/app/src/main/java/com/brinto/khata/util/ImageUtils.kt"
@@ -96,13 +96,15 @@ jobs:
           from pathlib import Path
           p = Path("brinto-khata-android/app/src/main/java/com/brinto/khata/util/ImageUtils.kt")
           t = p.read_text()
-          opens = t.count("/*")
-          closes = t.count("*/")
-          print("block comment opens:", opens, "closes:", closes)
-          if opens > closes:
-              t = t.rstrip() + "\n*/\n"
+          # Kotlin block comments nest: the KDoc mentions image slash star, and
+          # that opener starts a nested comment that the KDoc close never ends,
+          # so the rest of the file (object ImageUtils) is swallowed.
+          if '"image/*"' in t:
+              t = t.replace('"image/*"', '"image"')
               p.write_text(t)
-              print("appended closing */ to balance the block comment")
+              print("removed nested comment opener from ImageUtils KDoc")
+          else:
+              print("no nested opener found in ImageUtils.kt")
           PYEOF
           echo "--- ImageUtils.kt after ---"
           cat "$F"
@@ -115,19 +117,28 @@ jobs:
           p = Path("brinto-khata-android/app/build.gradle.kts")
           t = p.read_text()
           if "material-icons-extended" not in t:
-              t = t.replace('implementation("androidx.compose.material3:material3")', 'implementation("androidx.compose.material3:material3")\n    implementation("androidx.compose.material:material-icons-extended")')
+              # The project declares material3 with a version, so anchor on the
+              # dependencies block instead of the material3 line. The Compose BOM
+              # (compose-bom:2024.09.00) manages this artifact version.
+              anchor = "dependencies {"
+              i = t.find(anchor)
+              if i < 0:
+                  raise SystemExit("ERROR: dependencies block not found")
+              line = '    implementation("androidx.compose.material:material-icons-extended")'
+              t = t[: i + len(anchor)] + chr(10) + line + t[i + len(anchor):]
               p.write_text(t)
               print("added material-icons-extended")
           else:
               print("material-icons-extended already present")
           PYEOF
+          grep -n "material" "$P/app/build.gradle.kts" || true
       - name: Set Gradle memory
         run: |
           P=brinto-khata-android
           echo "--- gradle.properties before ---"
           cat "$P/gradle.properties" || echo "(no gradle.properties)"
           touch "$P/gradle.properties"
-          # Keep the project's own gradle.properties (it enables AndroidX, etc.); only replace the memory lines and make sure AndroidX is enabled.
+          # Keep the project gradle.properties (it enables AndroidX, etc.); only replace the memory lines and make sure AndroidX is enabled.
           sed -i '/^org.gradle.jvmargs=/d; /^org.gradle.daemon=/d; /^org.gradle.parallel=/d; /^android.useAndroidX=/d' "$P/gradle.properties"
           printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.daemon=false\norg.gradle.parallel=false\nandroid.useAndroidX=true\n' >> "$P/gradle.properties"
           echo "--- gradle.properties after ---"
