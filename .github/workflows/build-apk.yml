@@ -86,6 +86,26 @@ jobs:
                   f.write_text(t)
                   print("patched", f)
           PYEOF
+      - name: Fix unclosed comment in ImageUtils
+        run: |
+          P=brinto-khata-android
+          F="$P/app/src/main/java/com/brinto/khata/util/ImageUtils.kt"
+          echo "--- ImageUtils.kt before ---"
+          cat "$F"
+          python3 - <<'PYEOF'
+          from pathlib import Path
+          p = Path("brinto-khata-android/app/src/main/java/com/brinto/khata/util/ImageUtils.kt")
+          t = p.read_text()
+          opens = t.count("/*")
+          closes = t.count("*/")
+          print("block comment opens:", opens, "closes:", closes)
+          if opens > closes:
+              t = t.rstrip() + "\n*/\n"
+              p.write_text(t)
+              print("appended closing */ to balance the block comment")
+          PYEOF
+          echo "--- ImageUtils.kt after ---"
+          cat "$F"
       - name: Add material-icons-extended
         run: |
           P=brinto-khata-android
