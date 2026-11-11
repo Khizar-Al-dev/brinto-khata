@@ -14,7 +14,7 @@ jobs:
 
       - name: Unzip project
         run: |
-          unzip -o brinto-khata-android-local.zip
+          unzip -o brinto-khata-android-local.zip -d brinto-khata-android-local
           ls brinto-khata-android-local
 
       - name: Set up JDK 17
