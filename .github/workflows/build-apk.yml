@@ -86,28 +86,6 @@ jobs:
                   f.write_text(t)
                   print("patched", f)
           PYEOF
-      - name: Fix nested comment in ImageUtils KDoc
-        run: |
-          P=brinto-khata-android
-          F="$P/app/src/main/java/com/brinto/khata/util/ImageUtils.kt"
-          echo "--- ImageUtils.kt before ---"
-          cat "$F"
-          python3 - <<'PYEOF'
-          from pathlib import Path
-          p = Path("brinto-khata-android/app/src/main/java/com/brinto/khata/util/ImageUtils.kt")
-          t = p.read_text()
-          # Kotlin block comments nest: the KDoc mentions image slash star, and
-          # that opener starts a nested comment that the KDoc close never ends,
-          # so the rest of the file (object ImageUtils) is swallowed.
-          if '"image/*"' in t:
-              t = t.replace('"image/*"', '"image"')
-              p.write_text(t)
-              print("removed nested comment opener from ImageUtils KDoc")
-          else:
-              print("no nested opener found in ImageUtils.kt")
-          PYEOF
-          echo "--- ImageUtils.kt after ---"
-          cat "$F"
       - name: Add material-icons-extended
         run: |
           P=brinto-khata-android
