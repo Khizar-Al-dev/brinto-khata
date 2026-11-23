@@ -20,7 +20,9 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
+          # 3.27.1: app_links 6.x (pulled in by supabase_flutter) needs the
+          # Flutter 3.27 plugin-loader ordering; 3.24.5 fails configuring it.
+          flutter-version: '3.27.1'
           channel: 'stable'
 
       - name: Set up Java 17 (Gradle 8.7 needs Java 17, not the runner's Java 25)
