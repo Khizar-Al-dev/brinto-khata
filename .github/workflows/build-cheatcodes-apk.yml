@@ -1,0 +1,42 @@
+name: Build CHEATCODES APK
+
+on:
+  push:
+    paths:
+      - 'cheatcodes-flutter.zip'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          rm -rf cheatcodes
+          mkdir -p cheatcodes
+          unzip -o cheatcodes-flutter.zip -d cheatcodes
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: cheatcodes
+        run: flutter pub get
+
+      - name: Analyze (warnings do not fail the build)
+        working-directory: cheatcodes
+        run: flutter analyze --no-pub || true
+
+      - name: Build APK (debug)
+        working-directory: cheatcodes
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cheatcodes-debug-apk
+          path: cheatcodes/build/app/outputs/flutter-apk/app-debug.apk
